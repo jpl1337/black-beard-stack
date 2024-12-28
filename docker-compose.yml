@@ -1,0 +1,294 @@
+# This is the docker compose for black-beard-stack
+version: "3.9"
+services:
+  nginx:
+    image: nginx
+    container_name: nginx
+    volumes:
+      - ${NGINX_PATH}/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - "80:80"
+    depends_on:
+      - plex
+      - qbittorrent
+      - sabnzbd
+      - prowlarr
+      - radarr
+      - sonarr
+      - tdarr
+      - overseerr
+      - readarr
+      - lidarr
+      - bazarr
+      - tautulli
+    networks:
+      - app_net
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - VERSION=docker
+      - PLEX_CLAIM= #optional
+    volumes:
+      - ${PLEX_PATH}:/config
+      - ${TV_PATH}:/tv
+      - ${MOVIES_PATH}:/movies
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  vpn:
+    image: qmcgaw/gluetun
+    container_name: vpn
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - SERVER_REGIONS=${SERVER_REGIONS}
+      - TZ=${TZ}
+    ports:
+      - "8118:8118" # Optional, for HTTP proxy
+    volumes:
+      - ${GLUETUN_PATH}/gluetun/config:/gluetun
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+    volumes:
+      - ${QBITTORRENT_CONFIG_PATH}/qbittorrent/config:/config
+      - ${QBITTORRENT_DOWNLOADS_PATH}/qbittorrent/downloads:/downloads
+    network_mode: "service:vpn"
+    depends_on:
+      - vpn
+    restart: unless-stopped
+    networks:
+    - app_net  
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${SABNZBD_CONFIG_PATH}/sabnzbd/config:/config
+      - ${SABNZBD_DOWNLOADS_PATH}/downloads:/downloads #optional
+      - SABNZBD_INCOMPLETE_PATH/incomplete/downloads:/incomplete-downloads #optional
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${PROWLARR_CONFIG_PATH}/prowlarr/data:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${RADARR_CONFIG_PATH}/radarr/data:/config
+      - ${MOVIES_PATH}/movies:/movies
+      - ${RADARR_DOWNLOADS_PATH}/download-client-downloads:/downloads
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${SONARR_CONFIG_PATH}/sonarr/data:/config
+      - ${TV_PATH}/tvseries:/tv #optional
+      - ${SONARR_DOWNLOADS_PATH}/downloadclient-downloads:/downloads #optional
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${OVERSEERR_CONFIG_PATH}/overseerr/config:/config
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${READARR_CONFIG_PATH}/data:/config
+      - ${BOOKS_PATH}/books:/books #optional
+      - ${READARR_DOWNLOADS_PATH}/downloadclient-downloads:/downloads #optional
+    ports:
+      - 8787:8787
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${LIDARR_CONFIG_PATH}/lidarr/config:/config
+      - ${MUSIC_PATH}/music:/music #optional
+      - ${LIDARR_DOWNLOADS_PATH}/downloads:/downloads #optional
+    ports:
+      - 8686:8686
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${BAZARR_CONFIG_PATH}/bazarr/config:/config
+      - ${MOVIES_PATH}/movies:/movies #optional
+      - ${TV_PATH}/tv:/tv #optional
+    ports:
+      - 6767:6767
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /${TAUTULLI_CONFIG_PATH}/tautulli/config:/config
+    ports:
+      - 8181:8181
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=${TZ}
+    ports:
+      - 8191:8191
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  tdarr:
+    container_name: tdarr
+    image: ghcr.io/haveagitgat/tdarr:latest
+    restart: unless-stopped
+    ports:
+      - 8265:8265 # webUI port
+      - 8266:8266 # server port
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - UMASK_SET=002
+      - nodeName=ServerNode
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=true
+      - inContainer=true
+      - ffmpegVersion=6
+    volumes:
+      - ${TDARR_CONFIG_PATH}/tdarr/server:/app/server
+      - ${TDARR_CONFIG_PATH}/tdarr/configs:/app/configs
+      - ${TDARR_CONFIG_PATH}/tdarr/logs:/app/logs
+      - ${MEDIA_PATH}:/media
+      - ${MEDIA_PATH}/transcode_cache:/temp
+    devices:
+     - /dev/dri:/dev/dri #Required for HW transcoding / QuickSync
+
+
+# Tailscale is used to remtoely access the stack easily & securely
+# Generate an Oauth client and add the private key
+  tailscale:
+    image: tailscale/tailscale
+    container_name: tailscale
+    privileged: true
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - /${TAILSCALE_PATH}/tailscale/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    restart: unless-stopped
+    networks:
+      - app_net
