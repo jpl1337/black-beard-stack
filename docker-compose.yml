@@ -1,11 +1,49 @@
 # This is the docker compose for black-beard-stack
 version: "3.9"
+networks:
+  frontend_net:
+  backend_net:
 services:
+  vpn:
+    image: qmcgaw/gluetun
+    container_name: vpn
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - SERVER_REGIONS=${SERVER_REGIONS}
+      - TZ=${TZ}
+      - VPN_LOCAL_NETWORK=192.168.69.0/24
+    ports:
+      - 8080:8080  # qBittorrent
+      - 8118:8118  # Gluetun HTTP Proxy
+      - 9696:9696  # Prowlarr
+      - 5055:5055  # Overseerr
+      - 8686:8686  # Lidarr
+      - 8787:8787  # Readarr
+      - 8181:8181  # Tautulli
+      - 6767:6767  # Bazarr
+      - 8265:8265  # Tdarr WebUI
+      - 8266:8266  # Tdarr Node
+    volumes:
+      - ./configs/gluetun:/gluetun
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget","--spider", "-q", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   nginx:
     image: nginx
     container_name: nginx
     volumes:
-      - ${NGINX_PATH}/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/index.html:/usr/share/nginx/html/index.html:ro
     ports:
       - "80:80"
     depends_on:
@@ -22,65 +60,61 @@ services:
       - bazarr
       - tautulli
     networks:
-      - app_net
+      - frontend_net
+      - backend_net
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:80"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   plex:
     image: lscr.io/linuxserver/plex:latest
     container_name: plex
-    network_mode: host
+    network_mode: host 
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
       - VERSION=docker
-      - PLEX_CLAIM= #optional
+      - PLEX_CLAIM=${PLEX_CLAIM} # Optional claim token for initial setup
     volumes:
-      - ${PLEX_PATH}:/config
-      - ${TV_PATH}:/tv
-      - ${MOVIES_PATH}:/movies
-      - ${MUSIC_PATH}:/music
+      - ./configs/plex:/config
+      - ${MEDIA_PATH}/tv:/tv
+      - ${MEDIA_PATH}/movies:/movies
+      - ${MEDIA_PATH}/music:/music
       
     restart: unless-stopped
-    networks:
-    - app_net
-
-  vpn:
-    image: qmcgaw/gluetun
-    container_name: vpn
-    cap_add:
-      - NET_ADMIN
-    environment:
-      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
-      - VPN_TYPE=openvpn
-      - OPENVPN_USER=${OPENVPN_USER}
-      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
-      - SERVER_REGIONS=${SERVER_REGIONS}
-      - TZ=${TZ}
-    ports:
-      - "8118:8118" # Optional, for HTTP proxy
-    volumes:
-      - ${GLUETUN_PATH}/gluetun/config:/gluetun
-    restart: unless-stopped
-    networks:
-      - app_net
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:32400/web/index.html#!/"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   qbittorrent:
     image: linuxserver/qbittorrent
     container_name: qbittorrent
+    network_mode: service:vpn
+    depends_on:
+      - vpn
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
       - WEBUI_PORT=8080
     volumes:
-      - ${QBITTORRENT_CONFIG_PATH}:/config
-      - ${QBITTORRENT_DOWNLOADS_PATH}:/data/torrents
-    network_mode: "service:vpn"
-    depends_on:
-      - vpn
+      - ./configs/qbittorrent:/config
+      - ${MEDIA_PATH}/torrents:/data/torrents
+    
     restart: unless-stopped
-    networks:
-    - app_net  
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8080"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
@@ -90,14 +124,23 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${SABNZBD_CONFIG_PATH}:/config
-      - ${SABNZBD_DOWNLOADS_PATH}:/data/usenet #optional
-      - ${SABNZBD_INCOMPLETE_PATH}:/data/usenet/incomplete-downloads #optional
+      - ./configs/sabnzbd:/config
+      - ${MEDIA_PATH}/usenet:/data/usenet
+      - ${MEDIA_PATH}/usenet/incomplete-downloads:/data/usenet/incomplete-downloads #optional
+    network_mode: service:vpn
+    depends_on:
+    - vpn
     ports:
       - 8080:8080
     restart: unless-stopped
     networks:
-    - app_net
+    - backend_net
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8080"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
@@ -107,12 +150,19 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${PROWLARR_CONFIG_PATH}:/config
+    - ./configs/prowlarr:/config
     ports:
       - 9696:9696
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:9696"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
@@ -122,15 +172,22 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${RADARR_CONFIG_PATH}:/config
-      - ${MOVIES_PATH}:/data/movies
-      - ${SABNZBD_DOWNLOADS_PATH}:/data/usenet
-      - ${QBITTORRENT_DOWNLOADS_PATH}:/data/torrents
+      - ./configs/radarr:/config
+      - ${MEDIA_PATH}/movies:/data/movies
+      - ${MEDIA_PATH}/usenet:/data/usenet
+      - ${MEDIA_PATH}/torrents:/data/torrents
     ports:
       - 7878:7878
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:7878"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
@@ -140,15 +197,22 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${SONARR_CONFIG_PATH}:/config
-      - ${TV_PATH}:/data/tv #optional
-      - ${SABNZBD_DOWNLOADS_PATH}:/data/usenet
-      - ${QBITTORRENT_DOWNLOADS_PATH}:/data/torrents
+      - ./configs/sonarr:/config
+      - ${MEDIA_PATH}/tv:/data/tv #optional
+      - ${MEDIA_PATH}/usenet:/data/usenet
+      - ${MEDIA_PATH}/torrents:/data/torrents
     ports:
       - 8989:8989
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8989"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   overseerr:
     image: lscr.io/linuxserver/overseerr:latest
@@ -162,8 +226,15 @@ services:
     ports:
       - 5055:5055
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:5055"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   readarr:
     image: lscr.io/linuxserver/readarr:develop
@@ -173,15 +244,22 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${READARR_CONFIG_PATH}:/config
-      - ${BOOKS_PATH}:/data/books #optional
-      - ${SABNZBD_DOWNLOADS_PATH}:/data/usenet
-      - ${QBITTORRENT_DOWNLOADS_PATH}:/data/torrents #optional
+      - ./configs/readarr:/config
+      - ${MEDIA_PATH}/books:/data/books #optional
+      - ${MEDIA_PATH}/usenet:/data/usenet
+      - ${MEDIA_PATH}/torrents:/data/torrents
     ports:
       - 8787:8787
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8787"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
@@ -191,15 +269,22 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${LIDARR_CONFIG_PATH}:/config
-      - ${MUSIC_PATH}:/data/music #optional
-      - ${SABNZBD_DOWNLOADS_PATH}:/data/usenet
-      - ${QBITTORRENT_DOWNLOADS_PATH}:/data/torrents
+      - ./configs/lidarr:/config
+      - ${MEDIA_PATH}/music:/data/music #optional
+      - ${MEDIA_PATH}/usenet:/data/usenet
+      - ${MEDIA_PATH}/torrents:/data/torrents
     ports:
       - 8686:8686
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8686"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
@@ -209,14 +294,21 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${BAZARR_CONFIG_PATH}:/config
-      - ${MOVIES_PATH}:/data/movies #optional
-      - ${TV_PATH}:/data/tv #optional
+      - ./configs/bazarr:/config
+      - ${MEDIA_PATH}/movies:/data/movies #optional
+      - ${MEDIA_PATH}/tv:/data/tv #optional
     ports:
       - 6767:6767
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:6767"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   tautulli:
     image: lscr.io/linuxserver/tautulli:latest
@@ -226,12 +318,19 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - /${TAUTULLI_CONFIG_PATH}/tautulli/config:/config
+      - ./configs/tautulli:/config
     ports:
       - 8181:8181
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8181"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -244,8 +343,15 @@ services:
     ports:
       - 8191:8191
     restart: unless-stopped
-    networks:
-    - app_net
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    healthcheck:
+      test: ["CMD", "curl","--fail", "-s", "http://localhost:8191"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   tdarr:
     container_name: tdarr
@@ -254,6 +360,9 @@ services:
     ports:
       - 8265:8265 # webUI port
       - 8266:8266 # server port
+    network_mode: service:vpn
+    depends_on:
+      - vpn
     environment:
       - TZ=${TZ}
       - PUID=${PUID}
@@ -267,34 +376,19 @@ services:
       - inContainer=true
       - ffmpegVersion=6
     volumes:
-      - ${TDARR_CONFIG_PATH}/tdarr/server:/app/server
-      - ${TDARR_CONFIG_PATH}/tdarr/configs:/app/configs
-      - ${TDARR_CONFIG_PATH}/tdarr/logs:/app/logs
+      - ./configs/tdarr/server:/app/server
+      - ./configs/tdarr/configs:/app/configs
+      - ./configs/tdarr/logs:/app/logs
       - ${MEDIA_PATH}:/media
       - ${MEDIA_PATH}/transcode_cache:/temp
     devices:
      - /dev/dri:/dev/dri #Required for HW transcoding / QuickSync
-
-
-# Tailscale is used to remtoely access the stack easily & securely
-# Generate an Oauth client and add the private key
-  tailscale:
-    image: tailscale/tailscale
-    container_name: tailscale
-    privileged: true
-    environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
-      - TS_EXTRA_ARGS=--advertise-tags=tag:container
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-    volumes:
-      - /dev/net/tun:/dev/net/tun
-      - /${TAILSCALE_PATH}/tailscale/state:/var/lib/tailscale
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-      - sys_module
-    restart: unless-stopped
-    networks:
-      - app_net
+    healthcheck:
+      test: [
+        "CMD", "curl","--fail", "-s", "http://localhost:8265",
+        "&&", "curl","--fail", "-s", "http://localhost:8266",
+      ]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s

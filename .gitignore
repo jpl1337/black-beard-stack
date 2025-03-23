@@ -1,1 +1,5 @@
 *vars.env
+/configs/**
+!/configs/
+!/configs**/
+!/configs/**/README.md
