@@ -1,4 +1,4 @@
-*vars.env
+*.env
 /configs/**
 !/configs/
 !/configs**/

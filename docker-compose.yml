@@ -1,8 +1,5 @@
 # This is the docker compose for black-beard-stack
 version: "3.9"
-networks:
-  frontend_net:
-  backend_net:
 services:
   vpn:
     image: qmcgaw/gluetun
@@ -28,6 +25,7 @@ services:
       - 6767:6767  # Bazarr
       - 8265:8265  # Tdarr WebUI
       - 8266:8266  # Tdarr Node
+      - 8191:8191 # Flaresolverr
     volumes:
       - ./configs/gluetun:/gluetun
     restart: unless-stopped
@@ -43,25 +41,11 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/routes:/etc/nginx/routes:ro
       - ./nginx/index.html:/usr/share/nginx/html/index.html:ro
     ports:
       - "80:80"
-    depends_on:
-      - plex
-      - qbittorrent
-      - sabnzbd
-      - prowlarr
-      - radarr
-      - sonarr
-      - tdarr
-      - overseerr
-      - readarr
-      - lidarr
-      - bazarr
-      - tautulli
-    networks:
-      - frontend_net
-      - backend_net
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl","--fail", "-s", "http://localhost:80"]
       interval: 1m
@@ -74,8 +58,8 @@ services:
     container_name: plex
     network_mode: host 
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${PUID}
+      - PGID=${PGID}
       - TZ=Etc/UTC
       - VERSION=docker
       - PLEX_CLAIM=${PLEX_CLAIM} # Optional claim token for initial setup
@@ -94,7 +78,7 @@ services:
       start_period: 30s
 
   qbittorrent:
-    image: linuxserver/qbittorrent
+    image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     network_mode: service:vpn
     depends_on:
@@ -130,11 +114,7 @@ services:
     network_mode: service:vpn
     depends_on:
     - vpn
-    ports:
-      - 8080:8080
     restart: unless-stopped
-    networks:
-    - backend_net
     healthcheck:
       test: ["CMD", "curl","--fail", "-s", "http://localhost:8080"]
       interval: 1m
@@ -151,8 +131,6 @@ services:
       - TZ=${TZ}
     volumes:
     - ./configs/prowlarr:/config
-    ports:
-      - 9696:9696
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -176,8 +154,6 @@ services:
       - ${MEDIA_PATH}/movies:/data/movies
       - ${MEDIA_PATH}/usenet:/data/usenet
       - ${MEDIA_PATH}/torrents:/data/torrents
-    ports:
-      - 7878:7878
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -201,8 +177,6 @@ services:
       - ${MEDIA_PATH}/tv:/data/tv #optional
       - ${MEDIA_PATH}/usenet:/data/usenet
       - ${MEDIA_PATH}/torrents:/data/torrents
-    ports:
-      - 8989:8989
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -222,9 +196,7 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ${OVERSEERR_CONFIG_PATH}:/config
-    ports:
-      - 5055:5055
+      - /configs/overseer:/config
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -248,8 +220,6 @@ services:
       - ${MEDIA_PATH}/books:/data/books #optional
       - ${MEDIA_PATH}/usenet:/data/usenet
       - ${MEDIA_PATH}/torrents:/data/torrents
-    ports:
-      - 8787:8787
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -273,8 +243,6 @@ services:
       - ${MEDIA_PATH}/music:/data/music #optional
       - ${MEDIA_PATH}/usenet:/data/usenet
       - ${MEDIA_PATH}/torrents:/data/torrents
-    ports:
-      - 8686:8686
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -297,8 +265,6 @@ services:
       - ./configs/bazarr:/config
       - ${MEDIA_PATH}/movies:/data/movies #optional
       - ${MEDIA_PATH}/tv:/data/tv #optional
-    ports:
-      - 6767:6767
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -319,8 +285,6 @@ services:
       - TZ=${TZ}
     volumes:
       - ./configs/tautulli:/config
-    ports:
-      - 8181:8181
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -340,8 +304,6 @@ services:
       - LOG_HTML=false
       - CAPTCHA_SOLVER=none
       - TZ=${TZ}
-    ports:
-      - 8191:8191
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
@@ -357,16 +319,13 @@ services:
     container_name: tdarr
     image: ghcr.io/haveagitgat/tdarr:latest
     restart: unless-stopped
-    ports:
-      - 8265:8265 # webUI port
-      - 8266:8266 # server port
     network_mode: service:vpn
     depends_on:
       - vpn
     environment:
       - TZ=${TZ}
       - PUID=${PUID}
-      - PGID=${GUID}
+      - PGID=${PGID}
       - UMASK_SET=002
       - nodeName=ServerNode
       - serverIP=0.0.0.0
