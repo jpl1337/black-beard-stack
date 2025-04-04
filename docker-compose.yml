@@ -315,39 +315,39 @@ services:
       retries: 5
       start_period: 30s
 
-  tdarr:
-    container_name: tdarr
-    image: ghcr.io/haveagitgat/tdarr:latest
-    restart: unless-stopped
-    network_mode: service:vpn
-    depends_on:
-      - vpn
-    environment:
-      - TZ=${TZ}
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - UMASK_SET=002
-      - nodeName=ServerNode
-      - serverIP=0.0.0.0
-      - serverPort=8266
-      - webUIPort=8265
-      - internalNode=true
-      - inContainer=true
-      - ffmpegVersion=6
-    volumes:
-      - ./configs/tdarr/server:/app/server
-      - ./configs/tdarr/configs:/app/configs
-      - ./configs/tdarr/logs:/app/logs
-      - ${MEDIA_PATH}:/media
-      - ${MEDIA_PATH}/transcode_cache:/temp
-    devices:
-     - /dev/dri:/dev/dri #Required for HW transcoding / QuickSync
-    healthcheck:
-      test: [
-        "CMD", "curl","--fail", "-s", "http://localhost:8265",
-        "&&", "curl","--fail", "-s", "http://localhost:8266",
-      ]
-      interval: 1m
-      timeout: 30s
-      retries: 5
-      start_period: 30s
+  # tdarr:
+  #   container_name: tdarr
+  #   image: ghcr.io/haveagitgat/tdarr:latest
+  #   restart: unless-stopped
+  #   network_mode: service:vpn
+  #   depends_on:
+  #     - vpn
+  #   environment:
+  #     - TZ=${TZ}
+  #     - PUID=${PUID}
+  #     - PGID=${PGID}
+  #     - UMASK_SET=002
+  #     - nodeName=ServerNode
+  #     - serverIP=0.0.0.0
+  #     - serverPort=8266
+  #     - webUIPort=8265
+  #     - internalNode=true
+  #     - inContainer=true
+  #     - ffmpegVersion=6
+  #   volumes:
+  #     - ./configs/tdarr/server:/app/server
+  #     - ./configs/tdarr/configs:/app/configs
+  #     - ./configs/tdarr/logs:/app/logs
+  #     - ${MEDIA_PATH}:/media
+  #     - ${MEDIA_PATH}/transcode_cache:/temp
+  #   devices:
+  #    - /dev/dri:/dev/dri #Required for HW transcoding / QuickSync
+  #   healthcheck:
+  #     test: [
+  #       "CMD", "curl","--fail", "-s", "http://localhost:8265",
+  #       "&&", "curl","--fail", "-s", "http://localhost:8266",
+  #     ]
+  #     interval: 1m
+  #     timeout: 30s
+  #     retries: 5
+  #     start_period: 30s
