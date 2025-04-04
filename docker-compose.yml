@@ -6,6 +6,8 @@ services:
     container_name: vpn
     cap_add:
       - NET_ADMIN
+    devices:
+      - /dev/net/tun
     environment:
       - DISABLE_IPV6=true
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
