@@ -26,7 +26,7 @@ services:
       - 7878:7878 # Radarr
       - 5055:5055 # Overseerr
       - 8686:8686 # Lidarr
-      - 8787:8787 # Readarr
+      - 5299:5299 # LazyLibrarian
       - 8181:8181 # Tautulli
       - 6767:6767 # Bazarr
       - 8265:8265 # Tdarr WebUI
@@ -89,7 +89,8 @@ services:
     container_name: qbittorrent
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -125,7 +126,8 @@ services:
       - /path/to/downloads:/downloads #optional
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -150,7 +152,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -177,7 +180,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -204,7 +208,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -224,11 +229,12 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - /configs/overseer:/config
+      - ./configs/overseer:/config
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -240,29 +246,30 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
-  readarr:
-    image:  ghcr.io/pennydreadful/bookshelf:hardcover-v0.4.20.91
-    container_name: readarr
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./configs/readarr:/config
-      - ${MEDIA_PATH}/books:/data/books #optional
+      - ./configs/lazylibrarian:/config
+      - ${MEDIA_PATH}/books:/data/books
       - ${MEDIA_PATH}/usenet:/data/usenet
       - ${MEDIA_PATH}/torrents:/data/torrents
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
         - curl
         - --fail
         - -s
-        - http://localhost:8787
+        - http://localhost:5299
       interval: 1m
       timeout: 30s
       retries: 5
@@ -282,7 +289,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -308,7 +316,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -332,7 +341,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -355,7 +365,8 @@ services:
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
-      - vpn
+      vpn:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
